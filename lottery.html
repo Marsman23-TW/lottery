@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>抽獎器</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --gold: #F0B429;
+    --gold-light: #FAEEDA;
+    --gold-dark: #7A5800;
+    --bg: #0d0d0d;
+    --surface: #1a1a1a;
+    --surface2: #242424;
+    --border: rgba(240,180,41,0.2);
+    --text: #f5f0e8;
+    --text-muted: #888;
+    --red: #E24B4A;
+    --green: #1D9E75;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Serif TC', serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem 1rem;
+    background-image: radial-gradient(ellipse at 50% 0%, rgba(240,180,41,0.08) 0%, transparent 60%);
+  }
+
+  h1 {
+    font-size: clamp(1.6rem, 5vw, 2.4rem);
+    font-weight: 900;
+    letter-spacing: 0.15em;
+    color: var(--gold);
+    text-align: center;
+    margin-bottom: 0.4rem;
+  }
+
+  .subtitle {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 2.5rem;
+    text-align: center;
+  }
+
+  .main-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    width: 100%;
+    max-width: 560px;
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+  }
+
+  /* --- Stage --- */
+  .stage {
+    height: 160px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 2rem;
+    position: relative;
+  }
+
+  .name-display {
+    font-size: clamp(2rem, 10vw, 3.6rem);
+    font-weight: 900;
+    text-align: center;
+    min-height: 1.2em;
+    line-height: 1.2;
+    transition: color 0.2s;
+    word-break: break-all;
+  }
+
+  .name-display.rolling { color: var(--gold); animation: flicker 0.1s infinite alternate; }
+  .name-display.result { color: #fff; animation: popIn 0.4s cubic-bezier(0.34,1.56,0.64,1); }
+  .name-display.empty { color: var(--text-muted); font-size: 1.2rem; font-weight: 400; }
+
+  @keyframes flicker {
+    from { opacity: 0.7; transform: scale(0.98); }
+    to   { opacity: 1;   transform: scale(1.02); }
+  }
+  @keyframes popIn {
+    0%   { transform: scale(0.5); opacity: 0; }
+    100% { transform: scale(1);   opacity: 1; }
+  }
+
+  .confetti-wrap {
+    position: absolute; inset: 0; pointer-events: none; overflow: hidden; border-radius: 12px;
+  }
+  .confetti-wrap span {
+    position: absolute;
+    width: 8px; height: 8px;
+    border-radius: 2px;
+    opacity: 0;
+    animation: fall 1.2s ease-in forwards;
+  }
+  @keyframes fall {
+    0%   { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(160px) rotate(360deg); opacity: 0; }
+  }
+
+  /* --- Draw Button --- */
+  .draw-btn {
+    display: block;
+    width: 100%;
+    padding: 1rem;
+    font-family: 'Noto Serif TC', serif;
+    font-size: 1.2rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    background: var(--gold);
+    color: #1a0e00;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.2s, background 0.2s;
+    box-shadow: 0 0 30px rgba(240,180,41,0.3);
+    margin-bottom: 1rem;
+  }
+  .draw-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 40px rgba(240,180,41,0.5); }
+  .draw-btn:active:not(:disabled) { transform: scale(0.98); }
+  .draw-btn:disabled { background: #444; color: #777; box-shadow: none; cursor: not-allowed; }
+
+  /* --- Remove button --- */
+  .remove-btn {
+    display: none;
+    width: 100%;
+    padding: 0.75rem;
+    font-family: 'Noto Serif TC', serif;
+    font-size: 0.95rem;
+    font-weight: 700;
+    background: transparent;
+    color: var(--red);
+    border: 1px solid var(--red);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.15s;
+    margin-bottom: 1rem;
+  }
+  .remove-btn:hover { background: rgba(226,75,74,0.1); }
+  .remove-btn.visible { display: block; }
+
+  /* --- Names list --- */
+  .section-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 0.75rem;
+  }
+
+  .names-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 1.25rem;
+    min-height: 36px;
+  }
+
+  .name-tag {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: border-color 0.2s;
+  }
+  .name-tag.winner-tag { border-color: var(--gold); color: var(--gold); }
+  .name-tag button {
+    background: none; border: none; cursor: pointer;
+    color: #555; font-size: 14px; line-height: 1; padding: 0;
+    transition: color 0.15s;
+  }
+  .name-tag button:hover { color: var(--red); }
+
+  /* --- Add input --- */
+  .add-block {
+    margin-bottom: 1.5rem;
+  }
+  .add-block textarea {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Noto Serif TC', serif;
+    font-size: 0.95rem;
+    padding: 10px 12px;
+    outline: none;
+    transition: border-color 0.2s;
+    resize: vertical;
+    min-height: 80px;
+    line-height: 1.6;
+    display: block;
+    margin-bottom: 8px;
+  }
+  .add-block textarea:focus { border-color: var(--gold); }
+  .add-block textarea::placeholder { color: var(--text-muted); }
+  .add-block button {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--gold);
+    font-family: 'Noto Serif TC', serif;
+    font-size: 0.9rem;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    width: 100%;
+  }
+  .add-block button:hover { background: rgba(240,180,41,0.1); border-color: var(--gold); }
+
+  /* --- History --- */
+  .history-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 560px;
+    padding: 1.5rem 2rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+  .clear-btn {
+    background: none; border: none; cursor: pointer;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    transition: color 0.15s;
+  }
+  .clear-btn:hover { color: var(--red); }
+
+  .history-list { list-style: none; }
+  .history-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    font-size: 0.9rem;
+  }
+  .history-list li:last-child { border-bottom: none; }
+  .history-list .h-name { font-weight: 700; color: var(--gold); }
+  .history-list .h-time { font-family: 'Space Mono', monospace; font-size: 0.7rem; color: var(--text-muted); }
+  .history-empty { font-size: 0.85rem; color: var(--text-muted); text-align: center; padding: 0.5rem 0; }
+
+  /* --- Share --- */
+  .share-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 560px;
+    padding: 1.5rem 2rem;
+  }
+
+  .share-row { display: flex; gap: 8px; margin-top: 0.75rem; }
+  .share-input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-muted);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.72rem;
+    padding: 8px 12px;
+    outline: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .copy-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--gold);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.72rem;
+    padding: 8px 14px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s;
+    letter-spacing: 0.05em;
+  }
+  .copy-btn:hover { background: rgba(240,180,41,0.1); border-color: var(--gold); }
+  .copy-btn.copied { color: var(--green); border-color: var(--green); }
+</style>
+</head>
+<body>
+
+<h1>🎉 抽獎器</h1>
+<p class="subtitle">Lucky Draw</p>
+
+<div class="main-card">
+  <!-- Stage -->
+  <div class="stage">
+    <div class="confetti-wrap" id="confettiWrap"></div>
+    <div class="name-display empty" id="nameDisplay">等待抽獎...</div>
+  </div>
+
+  <button class="draw-btn" id="drawBtn" onclick="startDraw()">開始抽獎</button>
+  <button class="remove-btn" id="removeBtn" onclick="removeWinner()">從名單中移除此人</button>
+
+  <div class="section-label">名單（<span id="countLabel">0</span> 人）</div>
+  <div class="names-grid" id="namesGrid"></div>
+
+  <div class="add-block">
+    <textarea id="nameInput" placeholder="一行一個名字，可貼上多行一次加入&#10;例如：&#10;張三&#10;李四&#10;王五"></textarea>
+    <button onclick="addNames()">＋ 加入名單</button>
+  </div>
+</div>
+
+<!-- History -->
+<div class="history-card">
+  <div class="history-header">
+    <span class="section-label" style="margin:0">抽獎紀錄</span>
+    <button class="clear-btn" onclick="clearHistory()">清除紀錄</button>
+  </div>
+  <ul class="history-list" id="historyList"></ul>
+</div>
+
+<!-- Share -->
+<div class="share-card">
+  <div class="section-label" style="margin-bottom:0.4rem">分享連結</div>
+  <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.5rem">複製此連結，別人開啟後可使用相同的名單抽獎</p>
+  <div class="share-row">
+    <input class="share-input" id="shareInput" readonly>
+    <button class="copy-btn" id="copyBtn" onclick="copyLink()">複製</button>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'lottery_names_v1';
+const HISTORY_KEY = 'lottery_history_v1';
+
+let names = [];
+let history = [];
+let rolling = false;
+let lastWinner = null;
+
+function loadData() {
+  // 1. Check URL params first (shared link)
+  const params = new URLSearchParams(window.location.search);
+  const urlNames = params.get('names');
+  if (urlNames) {
+    try {
+      names = JSON.parse(decodeURIComponent(urlNames));
+    } catch(e) { names = []; }
+  } else {
+    // 2. Load from localStorage
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      try { names = JSON.parse(stored); } catch(e) { names = []; }
+    } else {
+      names = ['張三', '李四', '王五', '趙六', '陳七'];
+    }
+  }
+
+  const h = localStorage.getItem(HISTORY_KEY);
+  if (h) { try { history = JSON.parse(h); } catch(e) { history = []; } }
+}
+
+function saveNames() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(names));
+  updateShareLink();
+}
+
+function saveHistory() {
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 50)));
+}
+
+function render() {
+  const grid = document.getElementById('namesGrid');
+  grid.innerHTML = '';
+  names.forEach((n, i) => {
+    const tag = document.createElement('div');
+    tag.className = 'name-tag' + (n === lastWinner ? ' winner-tag' : '');
+    tag.innerHTML = `<span>${n}</span><button onclick="removeName(${i})" title="移除">✕</button>`;
+    grid.appendChild(tag);
+  });
+  document.getElementById('countLabel').textContent = names.length;
+  document.getElementById('drawBtn').disabled = names.length < 1;
+  renderHistory();
+  updateShareLink();
+}
+
+function renderHistory() {
+  const list = document.getElementById('historyList');
+  if (history.length === 0) {
+    list.innerHTML = '<li><span class="history-empty">尚無紀錄</span></li>';
+    return;
+  }
+  list.innerHTML = history.map(h =>
+    `<li><span class="h-name">${h.name}</span><span class="h-time">${h.time}</span></li>`
+  ).join('');
+}
+
+function addNames() {
+  const input = document.getElementById('nameInput');
+  const lines = input.value.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  if (lines.length === 0) return;
+  let added = 0;
+  lines.forEach(val => {
+    if (!names.includes(val)) { names.push(val); added++; }
+  });
+  input.value = '';
+  if (added > 0) { saveNames(); render(); }
+}
+
+function removeName(i) {
+  names.splice(i, 1);
+  if (lastWinner && !names.includes(lastWinner)) lastWinner = null;
+  saveNames();
+  render();
+}
+
+function removeWinner() {
+  if (!lastWinner) return;
+  const i = names.indexOf(lastWinner);
+  if (i !== -1) names.splice(i, 1);
+  saveNames();
+  lastWinner = null;
+  document.getElementById('nameDisplay').textContent = '等待抽獎...';
+  document.getElementById('nameDisplay').className = 'name-display empty';
+  document.getElementById('removeBtn').classList.remove('visible');
+  render();
+}
+
+function clearHistory() {
+  history = [];
+  saveHistory();
+  renderHistory();
+}
+
+function startDraw() {
+  if (rolling || names.length === 0) return;
+  rolling = true;
+  lastWinner = null;
+  document.getElementById('removeBtn').classList.remove('visible');
+  document.getElementById('drawBtn').disabled = true;
+
+  const display = document.getElementById('nameDisplay');
+  display.className = 'name-display rolling';
+
+  let ticks = 0;
+  const totalTicks = 24 + Math.floor(Math.random() * 12);
+  const interval = setInterval(() => {
+    display.textContent = names[Math.floor(Math.random() * names.length)];
+    ticks++;
+    if (ticks >= totalTicks) {
+      clearInterval(interval);
+      const winner = names[Math.floor(Math.random() * names.length)];
+      lastWinner = winner;
+      display.textContent = winner;
+      display.className = 'name-display result';
+
+      // Record
+      const now = new Date();
+      const timeStr = `${now.getMonth()+1}/${now.getDate()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+      history.unshift({ name: winner, time: timeStr });
+      saveHistory();
+
+      launchConfetti();
+      rolling = false;
+      document.getElementById('drawBtn').disabled = false;
+      document.getElementById('removeBtn').classList.add('visible');
+      render();
+    }
+  }, 80);
+}
+
+const COLORS = ['#F0B429','#E24B4A','#1D9E75','#378ADD','#D4537E','#F5C4B3'];
+function launchConfetti() {
+  const wrap = document.getElementById('confettiWrap');
+  wrap.innerHTML = '';
+  for (let i = 0; i < 18; i++) {
+    const s = document.createElement('span');
+    s.style.left = Math.random() * 100 + '%';
+    s.style.top = '-10px';
+    s.style.background = COLORS[Math.floor(Math.random() * COLORS.length)];
+    s.style.animationDelay = (Math.random() * 0.5) + 's';
+    s.style.animationDuration = (0.8 + Math.random() * 0.8) + 's';
+    s.style.transform = `rotate(${Math.random()*360}deg)`;
+    wrap.appendChild(s);
+    setTimeout(() => s.remove(), 1600);
+  }
+}
+
+function updateShareLink() {
+  const encoded = encodeURIComponent(JSON.stringify(names));
+  const url = window.location.origin + window.location.pathname + '?names=' + encoded;
+  document.getElementById('shareInput').value = url;
+}
+
+function copyLink() {
+  const val = document.getElementById('shareInput').value;
+  const btn = document.getElementById('copyBtn');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(val).then(() => {
+      btn.textContent = '✓ 已複製';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = '複製'; btn.classList.remove('copied'); }, 2000);
+    }).catch(() => fallbackCopy(val, btn));
+  } else {
+    fallbackCopy(val, btn);
+  }
+}
+
+function fallbackCopy(val, btn) {
+  const ta = document.createElement('textarea');
+  ta.value = val;
+  ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try {
+    document.execCommand('copy');
+    btn.textContent = '✓ 已複製';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = '複製'; btn.classList.remove('copied'); }, 2000);
+  } catch(e) {
+    document.getElementById('shareInput').select();
+    btn.textContent = '請手動複製';
+    setTimeout(() => { btn.textContent = '複製'; }, 2500);
+  }
+  document.body.removeChild(ta);
+}
+
+loadData();
+render();
+</script>
+</body>
+</html>
